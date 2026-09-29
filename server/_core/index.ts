@@ -79,12 +79,18 @@ async function startServer() {
         },
         signal: AbortSignal.timeout(12_000),
       });
-      if (!response.ok) throw new Error(`Nominatim HTTP ${response.status}`);
+      if (!response.ok) {
+        const bodyText = await response.text().catch(() => "");
+        console.error(`[geocode] Nominatim respondeu ${response.status} para "${query}": ${bodyText.slice(0, 300)}`);
+        throw new Error(`Nominatim HTTP ${response.status}`);
+      }
       const results = await response.json() as Array<{ lat: string; lon: string; display_name: string }>;
       const result = results[0] ?? null;
+      if (!result) console.warn(`[geocode] Nominatim não retornou resultados para "${query}"`);
       geocodeCache.set(cacheKey, { expiresAt: Date.now() + 24 * 60 * 60 * 1_000, result });
       return res.json({ result, cached: false });
     } catch (error) {
+      console.error(`[geocode] Falha ao consultar "${query}":`, error instanceof Error ? error.message : error);
       return res.status(502).json({ error: "geocoding-unavailable", detail: error instanceof Error ? error.message : String(error) });
     }
   });
