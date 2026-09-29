@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1789750770518,
+      "tag": "0000_tidy_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1789764832416,
+      "tag": "0001_sparkling_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1789996721084,
+      "tag": "0002_dazzling_multiple_man",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [
+    "server",
+    "db",
+    "user"
+  ],
+  "dev_command": "pnpm run dev",
+  "env_vars": {
+    "DATABASE_URL": "mysql://6R9L2FKJocPJSF6.root:bBoq0ki5mE771W9KCetm@gateway04.us-east-1.prod.aws.tidbcloud.com:4000/UemJjYjBmJvcKkR7vEvh4C?ssl={\"rejectUnauthorized\":true}"
+  },
+  "experiments": [
+    "no_db_push"
+  ],
+  "git_remote": {
+    "repo_url": "https://7f0548f6b28a1758d9bf7be630d36cb4.artifacts.cloudflare.net/git/prod/UemJjYjBmJvcKkR7vEvh4C.git",
+    "expiration": "2026-09-19T16:59:09.125Z",
+    "token": "art_v2_x_c8a2c5e559a2b3e442361acc77aeb65b370583a1?expires=1789837149",
+    "backend": "GIT_BACKEND_ARTIFACTS"
+  },
+  "name": "entorno-salvador-mvp",
+  "path": "/home/ubuntu/entorno-salvador-mvp",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "5qvZYpTjPAYkpHnLp2iGTs",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "Y5HYEzb3WJMLZUghVWZNjb",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "Cesar Valentim",
+    "OWNER_OPEN_ID": "GPCQYNyPnCWbBYyR2V8s8d",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "f996ec26-edd4-4004-9359-ca5126a4adbb",
+    "VITE_APP_ID": "UemJjYjBmJvcKkR7vEvh4C",
+    "VITE_APP_LOGO": "",
+    "VITE_APP_TITLE": "Entorno Salvador",
+    "VITE_FRONTEND_FORGE_API_KEY": "ZkFtLCzmqiWUzzQkxSmXWq",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-db-user",
+  "test_command": "pnpm test"
+}
