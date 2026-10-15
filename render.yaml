@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: pnpm install --frozen-lockfile && pnpm build:render
+    preDeployCommand: pnpm db:migrate
     startCommand: pnpm start
     healthCheckPath: /
     envVars:
@@ -27,7 +28,11 @@ services:
         sync: false
       - key: FOGO_CRUZADO_API_URL
         value: https://api-service.fogocruzado.org.br/api/v2
-      - key: FOGO_CRUZADO_API_SECRET
+      - key: FOGO_CRUZADO_API_EMAIL
+        sync: false
+      - key: FOGO_CRUZADO_API_PASSWORD
+        sync: false
+      - key: FOGO_CRUZADO_API_TOKEN
         sync: false
 
   - type: cron
@@ -44,5 +49,9 @@ services:
         sync: false
       - key: FOGO_CRUZADO_API_URL
         value: https://api-service.fogocruzado.org.br/api/v2
-      - key: FOGO_CRUZADO_API_SECRET
+      - key: FOGO_CRUZADO_API_EMAIL
+        sync: false
+      - key: FOGO_CRUZADO_API_PASSWORD
+        sync: false
+      - key: FOGO_CRUZADO_API_TOKEN
         sync: false

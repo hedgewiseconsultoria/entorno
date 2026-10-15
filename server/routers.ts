@@ -23,13 +23,8 @@ export const appRouter = router({
   }),
   analysis: router({
     byLocation: publicProcedure
-      .input(z.object({
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
-        radiusMeters: z.number().int().min(100).max(2000).optional(),
-        mode: z.enum(["morar", "visitar"]).default("morar"),
-      }))
-      .query(({ input }) => analyzeLocation({ lat: input.latitude, lon: input.longitude }, input.radiusMeters, input.mode)),
+      .input(z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180), radiusMeters: z.number().int().min(100).max(2000).default(500) }))
+      .query(({ input }) => analyzeLocation({ lat: input.latitude, lon: input.longitude }, input.radiusMeters)),
   }),
   community: router({
     listApproved: publicProcedure.query(async () => listApprovedReports()),

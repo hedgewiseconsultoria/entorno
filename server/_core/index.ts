@@ -9,7 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { sdk } from "./sdk";
 import { refreshPublicSources } from "../source-refresh";
-import { getSourcePayload } from "../db";
+import { getSourcePayload, listLatestSourceSnapshots } from "../db";
 import { serveStatic, setupVite } from "./vite";
 
 const geocodeCache = new Map<string, { expiresAt: number; result: { lat: string; lon: string; display_name: string } | null }>();
@@ -79,20 +79,23 @@ async function startServer() {
         },
         signal: AbortSignal.timeout(12_000),
       });
-      if (!response.ok) {
-        const bodyText = await response.text().catch(() => "");
-        console.error(`[geocode] Nominatim respondeu ${response.status} para "${query}": ${bodyText.slice(0, 300)}`);
-        throw new Error(`Nominatim HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Nominatim HTTP ${response.status}`);
       const results = await response.json() as Array<{ lat: string; lon: string; display_name: string }>;
       const result = results[0] ?? null;
-      if (!result) console.warn(`[geocode] Nominatim não retornou resultados para "${query}"`);
       geocodeCache.set(cacheKey, { expiresAt: Date.now() + 24 * 60 * 60 * 1_000, result });
       return res.json({ result, cached: false });
     } catch (error) {
-      console.error(`[geocode] Falha ao consultar "${query}":`, error instanceof Error ? error.message : error);
       return res.status(502).json({ error: "geocoding-unavailable", detail: error instanceof Error ? error.message : String(error) });
     }
+  });
+  app.get("/api/health/sources", async (_req, res) => {
+    const slugs = ["fogo-cruzado-salvador-csv", "geosalvador-bairros", "geosalvador-escolas", "geosalvador-orgaos-publicos"];
+    const payloads = await Promise.all(slugs.map(async (sourceSlug) => {
+      const payload = await getSourcePayload(sourceSlug);
+      return payload ? { sourceSlug, status: "available", fetchedAt: payload.fetchedAt, rowCount: payload.rowCount, checksum: payload.checksum } : { sourceSlug, status: "missing" };
+    }));
+    const snapshots = await listLatestSourceSnapshots();
+    return res.json({ ok: payloads.every((source) => source.status === "available"), payloads, latestSnapshots: snapshots.slice(0, 20) });
   });
   app.get("/api/data/:sourceSlug", async (req, res) => {
     const allowed = new Set([

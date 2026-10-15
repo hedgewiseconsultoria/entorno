@@ -21,11 +21,11 @@ pnpm build
 pnpm dev
 ```
 
-A aplicação precisa de `DATABASE_URL` para análise real. A sincronização também precisa de `FOGO_CRUZADO_API_SECRET`. O segredo deve ser obtido junto ao Fogo Cruzado e nunca deve ser commitado.
+A aplicação precisa de `DATABASE_URL` para análise real. A sincronização usa a API v2 do Fogo Cruzado com `FOGO_CRUZADO_API_EMAIL` e `FOGO_CRUZADO_API_PASSWORD`, ou um `FOGO_CRUZADO_API_TOKEN` JWT. A API v2 atual não usa o antigo header `x-api-secret`; credenciais e tokens nunca devem ser commitados.
 
 ## Deploy no Render
 
-O arquivo `render.yaml` define o Web Service e o Cron Job diário. No Render, configure pelo menos `DATABASE_URL`, `FOGO_CRUZADO_API_SECRET`, `VITE_APP_ID`, `OWNER_OPEN_ID`, `BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY`, conforme o ambiente de autenticação adotado. Faça o primeiro deploy do Web Service e valide o banco antes de habilitar o Cron Job.
+O arquivo `render.yaml` define o Web Service e o Cron Job diário. No Render, configure pelo menos `DATABASE_URL`, `FOGO_CRUZADO_API_EMAIL`/`FOGO_CRUZADO_API_PASSWORD` ou `FOGO_CRUZADO_API_TOKEN`, `VITE_APP_ID`, `OWNER_OPEN_ID`, `BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY`, conforme o ambiente de autenticação adotado. O Web Service executa as migrações no pre-deploy. Depois do primeiro Cron Job, consulte `/api/health/sources` para confirmar os payloads.
 
 ```bash
 git init

@@ -1,11 +1,4 @@
-import { getSourcePayload, listApprovedReports } from "./db";
-
-export type AnalysisMode = "morar" | "visitar";
-
-const MODE_CONFIG: Record<AnalysisMode, { defaultRadiusMeters: number; violenceWindowDays: number; violenceWindowLabel: string; reportsWindowDays: number }> = {
-  morar: { defaultRadiusMeters: 500, violenceWindowDays: 730, violenceWindowLabel: "últimos 24 meses", reportsWindowDays: 180 },
-  visitar: { defaultRadiusMeters: 300, violenceWindowDays: 90, violenceWindowLabel: "últimos 90 dias", reportsWindowDays: 60 },
-};
+import { getSourcePayload } from "./db";
 
 type Point = { lat: number; lon: number };
 type FeatureCollection = { features?: Array<{ geometry?: { type?: string; coordinates?: unknown }; properties?: Record<string, unknown> }> };
@@ -83,23 +76,20 @@ async function getPayload(slug: string) {
   return payload;
 }
 
-export async function analyzeLocation(point: Point, radiusMeters?: number, mode: AnalysisMode = "morar") {
+export async function analyzeLocation(point: Point, radiusMeters = 500) {
   if (point.lat < -13.2 || point.lat > -12.6 || point.lon < -38.8 || point.lon > -38.2) throw new Error("A análise está limitada ao município de Salvador.");
-  const config = MODE_CONFIG[mode] ?? MODE_CONFIG.morar;
-  const effectiveRadius = radiusMeters ?? config.defaultRadiusMeters;
-  const [fogo, bairros, escolas, orgaos, approvedReports] = await Promise.all([
+  const [fogo, bairros, escolas, orgaos] = await Promise.all([
     getPayload("fogo-cruzado-salvador-csv"),
     getPayload("geosalvador-bairros"),
     getPayload("geosalvador-escolas"),
     getPayload("geosalvador-orgaos-publicos"),
-    listApprovedReports().catch(() => []),
   ]);
   const occurrences = parseCsv(fogo.payload).flatMap((row) => {
     const lat = Number(row.latitude); const lon = Number(row.longitude);
     return Number.isFinite(lat) && Number.isFinite(lon) ? [{ point: { lat, lon }, date: row.occurrence_date }] : [];
   });
-  const cutoff = Date.now() - config.violenceWindowDays * 24 * 60 * 60 * 1_000;
-  const nearbyOccurrences = occurrences.filter((row) => distanceMeters(point, row.point) <= effectiveRadius);
+  const cutoff = Date.now() - 730 * 24 * 60 * 60 * 1_000;
+  const nearbyOccurrences = occurrences.filter((row) => distanceMeters(point, row.point) <= radiusMeters);
   const recentOccurrences = nearbyOccurrences.filter((row) => Date.parse(row.date) >= cutoff);
   const schoolsNearby = pointFeatures(escolas.payload).filter(({ point: candidate }) => distanceMeters(point, candidate) <= 800);
   const orgaosNearby = pointFeatures(orgaos.payload).filter(({ point: candidate }) => distanceMeters(point, candidate) <= 800);
@@ -110,42 +100,14 @@ export async function analyzeLocation(point: Point, radiusMeters?: number, mode:
     if (geometry?.type === "MultiPolygon" && Array.isArray(geometry.coordinates)) return (geometry.coordinates as unknown[]).some((polygon) => polygonContains(point, polygon));
     return false;
   });
-
-  const reportsCutoff = Date.now() - config.reportsWindowDays * 24 * 60 * 60 * 1_000;
-  const nearbyReports = (approvedReports ?? []).filter((report) => {
-    const lat = report.latitude != null ? Number(report.latitude) : null;
-    const lon = report.longitude != null ? Number(report.longitude) : null;
-    if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-    if (distanceMeters(point, { lat, lon }) > effectiveRadius) return false;
-    const observed = report.observedAt ? Date.parse(String(report.observedAt)) : Date.parse(String(report.createdAt));
-    return Number.isFinite(observed) ? observed >= reportsCutoff : true;
-  });
-
   const freshness = [fogo, bairros, escolas, orgaos].map((source) => ({ source: source.sourceName, fetchedAt: source.fetchedAt, checksum: source.checksum }));
-
-  const limitations = [
-    "Fogo Cruzado registra violência armada notificada, não toda a criminalidade.",
-    "A ausência de registros não prova ausência de risco.",
-    "Distância de equipamentos não mede qualidade, frequência ou segurança do trajeto.",
-  ];
-  if (mode === "visitar") {
-    limitations.push(
-      "Estes indicadores descrevem o histórico da área, não o momento exato da sua visita — horário, dia da semana e evento local podem mudar o contexto.",
-      "Os dados são sincronizados diariamente; em caso de emergência, ligue 190 em vez de recarregar a análise.",
-    );
-  }
-
   return {
-    mode,
     point,
-    radiusMeters: effectiveRadius,
-    windowDays: config.violenceWindowDays,
-    windowLabel: config.violenceWindowLabel,
+    radiusMeters,
     neighborhood: String(bairro?.properties?.nome_bairr ?? bairro?.properties?.bairro ?? bairro?.properties?.nome ?? bairro?.properties?.name ?? "Não identificado"),
-    violence: { total: nearbyOccurrences.length, recentWindow: recentOccurrences.length },
+    violence: { total: nearbyOccurrences.length, recentTwoYears: recentOccurrences.length },
     services: { schoolsWithin800m: schoolsNearby.length, publicBodiesWithin800m: orgaosNearby.length },
-    community: { reportsNearby: nearbyReports.length, windowDays: config.reportsWindowDays },
     sources: freshness,
-    limitations,
+    limitations: ["Fogo Cruzado registra violência armada notificada, não toda a criminalidade.", "A ausência de registros não prova ausência de risco.", "Distância de equipamentos não mede qualidade, frequência ou segurança do trajeto."],
   };
 }

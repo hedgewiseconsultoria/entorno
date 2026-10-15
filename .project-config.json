@@ -1,9 +1,8 @@
 {
   "build_command": "pnpm run build",
   "capabilities": [
-    "server",
     "db",
-    "user"
+    "server"
   ],
   "dev_command": "pnpm run dev",
   "env_vars": {
@@ -14,13 +13,14 @@
   ],
   "git_remote": {
     "repo_url": "https://7f0548f6b28a1758d9bf7be630d36cb4.artifacts.cloudflare.net/git/prod/UemJjYjBmJvcKkR7vEvh4C.git",
-    "expiration": "2026-09-19T16:59:09.125Z",
-    "token": "art_v2_x_c8a2c5e559a2b3e442361acc77aeb65b370583a1?expires=1789837149",
+    "expiration": "2026-10-10T14:16:43.820Z",
+    "token": "art_v2_x_cfb5e2bb529fb608b015f1e29b6dc1afbe3b528d?expires=1791641803",
     "backend": "GIT_BACKEND_ARTIFACTS"
   },
   "name": "entorno-salvador-mvp",
   "path": "/home/ubuntu/entorno-salvador-mvp",
   "port": 3000,
+  "runtime_endpoints": null,
   "secrets": {
     "BUILT_IN_FORGE_API_KEY": "5qvZYpTjPAYkpHnLp2iGTs",
     "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
@@ -31,12 +31,12 @@
     "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
     "VITE_ANALYTICS_WEBSITE_ID": "f996ec26-edd4-4004-9359-ca5126a4adbb",
     "VITE_APP_ID": "UemJjYjBmJvcKkR7vEvh4C",
-    "VITE_APP_LOGO": "",
+    "VITE_APP_LOGO": "https://files.manuscdn.com/user_upload_by_module/web_dev_logo/310419663029507809/zDzzBUmmCaMObAXF.png",
     "VITE_APP_TITLE": "Entorno Salvador",
     "VITE_FRONTEND_FORGE_API_KEY": "ZkFtLCzmqiWUzzQkxSmXWq",
     "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
     "VITE_OAUTH_PORTAL_URL": "https://manus.im"
   },
-  "template_id": "web-db-user",
+  "template_id": "web-db",
   "test_command": "pnpm test"
 }

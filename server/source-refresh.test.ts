@@ -25,6 +25,8 @@ const occurrence = {
 function fakeFetch() {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.includes("/states")) return okResponse({ data: [{ id: "bahia-id", name: "Bahia" }] });
+    if (url.includes("/cities")) return okResponse({ data: [{ id: "salvador-id", name: "SALVADOR" }] });
     if (url.includes("/occurrences")) return okResponse({ pageMeta: { hasNextPage: false }, data: [occurrence] });
     return okResponse({ geometryType: "Point", features: [{ type: "Feature", geometry: { type: "Point", coordinates: [-38.5, -13] }, properties: { name: "Teste" } }] });
   });
@@ -36,7 +38,9 @@ describe("refreshPublicSources", () => {
     vi.restoreAllMocks();
     createSourceSnapshot.mockClear();
     upsertSourcePayload.mockClear();
-    process.env.FOGO_CRUZADO_API_SECRET = "test-secret";
+    process.env.FOGO_CRUZADO_API_TOKEN = "test-token";
+    delete process.env.FOGO_CRUZADO_API_EMAIL;
+    delete process.env.FOGO_CRUZADO_API_PASSWORD;
     vi.stubGlobal("fetch", fakeFetch());
   });
 

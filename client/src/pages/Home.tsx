@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleAlert,
   Database,
+  FileText,
   Filter,
   Info,
   Layers3,
@@ -28,27 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MapView } from "@/components/Map";
-import { ShareCard } from "@/components/ShareCard";
 import { trpc } from "@/lib/trpc";
-
-type Mode = "morar" | "visitar";
-
-const modeCopy: Record<Mode, { eyebrow: string; title: React.ReactNode; intro: string; placeholder: string; hint: string }> = {
-  morar: {
-    eyebrow: "DECISÕES DE MORADIA, COM CONTEXTO",
-    title: <>Antes de fechar o contrato,<br /><em>entenda o entorno.</em></>,
-    intro: "Uma leitura independente do endereço para quem quer alugar ou comprar em Salvador — sem rótulos absolutos, com fontes e limitações à vista.",
-    placeholder: "Digite o endereço do imóvel",
-    hint: "Raio de 500 m e janela de 24 meses — pensado para uma decisão de longo prazo.",
-  },
-  visitar: {
-    eyebrow: "ANTES DE SAIR DE CASA, CONTEXTO",
-    title: <>Antes de ir à casa de alguém,<br /><em>ou ao bar de hoje.</em></>,
-    intro: "A mesma leitura de dados públicos, ajustada para uma visita: raio mais curto e janela mais recente, para casas, bares, restaurantes ou qualquer endereço pontual em Salvador.",
-    placeholder: "Digite o endereço do local que você vai visitar",
-    hint: "Raio de 300 m e janela de 90 dias — pensado para um compromisso pontual, não uma mudança.",
-  },
-};
 
 const sourceCatalog = [
   {
@@ -211,7 +192,6 @@ function RealMap({ address, onLocationResolved }: { address: string; onLocationR
 export default function Home() {
   const [address, setAddress] = useState("Rua Alagoinhas, 277, Rio Vermelho, Salvador - BA");
   const [searchedAddress, setSearchedAddress] = useState(address);
-  const [mode, setMode] = useState<Mode>("morar");
   const [activeCategory, setActiveCategory] = useState("Todas");
   const [activeMetric, setActiveMetric] = useState("violence");
   const [showSources, setShowSources] = useState(false);
@@ -223,7 +203,7 @@ export default function Home() {
   const [resolvedLocation, setResolvedLocation] = useState<{ lat: number; lon: number; displayName: string } | null>(null);
   const submitReportMutation = trpc.community.submit.useMutation();
   const { data: latestSnapshots = [] } = trpc.sources.latest.useQuery();
-  const analysisInput = useMemo(() => ({ latitude: resolvedLocation?.lat ?? -13.013, longitude: resolvedLocation?.lon ?? -38.486, mode }), [resolvedLocation, mode]);
+  const analysisInput = useMemo(() => ({ latitude: resolvedLocation?.lat ?? -13.013, longitude: resolvedLocation?.lon ?? -38.486, radiusMeters: 500 }), [resolvedLocation]);
   const { data: analysis, isLoading: analysisLoading, error: analysisError } = trpc.analysis.byLocation.useQuery(analysisInput, { enabled: Boolean(resolvedLocation), retry: 1 });
   const onLocationResolved = useCallback((location: { lat: number; lon: number; displayName: string }) => setResolvedLocation(location), []);
 
@@ -254,7 +234,7 @@ export default function Home() {
   const displayedMetrics = useMemo(() => {
     if (!analysis) return metrics;
     return metrics.map((metric) => metric.key === "violence"
-      ? { ...metric, value: analysis.violence.recentWindow > 0 ? "Registros encontrados" : "Nenhum registro localizado", summary: `${analysis.violence.recentWindow} ocorrências em ${analysis.radiusMeters} m`, period: `${analysis.windowLabel} · Fogo Cruzado` }
+      ? { ...metric, value: analysis.violence.recentTwoYears > 0 ? "Registros encontrados" : "Nenhum registro localizado", summary: `${analysis.violence.recentTwoYears} ocorrências em 500 m`, period: "últimos 24 meses · Fogo Cruzado" }
       : metric.key === "services"
         ? { ...metric, value: analysis.services.schoolsWithin800m + analysis.services.publicBodiesWithin800m > 0 ? "Disponibilidade identificada" : "Poucos equipamentos", summary: `${analysis.services.schoolsWithin800m} escolas · ${analysis.services.publicBodiesWithin800m} órgãos em 800 m`, period: "GeoSalvador · consulta atual" }
         : metric.key === "urban"
@@ -286,19 +266,15 @@ export default function Home() {
 
       <section className="hero-shell" id="analise">
         <div className="hero-copy">
-          <div className="mode-toggle" role="tablist" aria-label="Tipo de consulta">
-            <button type="button" role="tab" aria-selected={mode === "morar"} className={mode === "morar" ? "mode-toggle-active" : ""} onClick={() => setMode("morar")}>Morar</button>
-            <button type="button" role="tab" aria-selected={mode === "visitar"} className={mode === "visitar" ? "mode-toggle-active" : ""} onClick={() => setMode("visitar")}>Visitar</button>
-          </div>
-          <div className="eyebrow"><Sparkles size={14} /> {modeCopy[mode].eyebrow}</div>
-          <h1>{modeCopy[mode].title}</h1>
-          <p className="hero-intro">{modeCopy[mode].intro}</p>
+          <div className="eyebrow"><Sparkles size={14} /> DECISÕES DE MORADIA, COM CONTEXTO</div>
+          <h1>Antes de fechar o contrato,<br /><em>entenda o entorno.</em></h1>
+          <p className="hero-intro">Uma leitura independente do endereço para quem quer alugar ou comprar em Salvador — sem rótulos absolutos, com fontes e limitações à vista.</p>
           <form className="search-box" onSubmit={runSearch}>
             <MapPin size={20} className="search-icon" />
-            <Input aria-label="Endereço" value={address} onChange={(event) => setAddress(event.target.value)} placeholder={modeCopy[mode].placeholder} />
+            <Input aria-label="Endereço do imóvel" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Digite o endereço do imóvel" />
             <Button type="submit" className="search-button"><Search size={17} /> Analisar</Button>
           </form>
-          <div className="search-hint"><Info size={14} /> {modeCopy[mode].hint}</div>
+          <div className="search-hint"><Info size={14} /> O endereço será geocodificado e os indicadores serão calculados com as fontes sincronizadas.</div>
         </div>
         <div className="hero-art" aria-label="Mapa ilustrativo de Salvador">
           <div className="art-label art-label-top">RIO VERMELHO <span>•</span> SALVADOR</div>
@@ -316,9 +292,9 @@ export default function Home() {
           <div>
             <div className="section-kicker">RELATÓRIO DE CONTEXTO</div>
             <h2 id="report-title">{searchedAddress}</h2>
-            <p className="report-meta"><span className="green-dot" /> {mode === "visitar" ? "Análise para visita" : "Análise para morar"} · raio de {analysis?.radiusMeters ?? (mode === "visitar" ? 300 : 500)} m · dados com data e checksum de atualização</p>
+            <p className="report-meta"><span className="green-dot" /> Análise por endereço · raio principal de 500 m · dados com data e checksum de atualização</p>
           </div>
-          <div className="report-actions"><Button variant="outline" className="outline-button" onClick={() => setShowSources(!showSources)}><Database size={16} /> Fontes usadas</Button></div>
+          <div className="report-actions"><Button variant="outline" className="outline-button" onClick={() => setShowSources(!showSources)}><Database size={16} /> Fontes usadas</Button><Button className="dark-button"><FileText size={16} /> Exportar PDF</Button></div>
         </div>
 
         {showSources && <div className="source-drawer"><div><strong>Transparência primeiro.</strong><span> O MVP separa fonte, período, unidade territorial e limitações de cada indicador. {latestSnapshots.length > 0 ? `${latestSnapshots.length} sincronizações registradas no banco.` : "A sincronização diária ainda não foi executada."}</span></div><button onClick={() => setShowSources(false)} aria-label="Fechar"><X size={18} /></button></div>}
@@ -365,8 +341,6 @@ export default function Home() {
         </div>
 
         <div className="insight-strip"><div className="insight-icon"><Info size={19} /></div><div><strong>Leia o conjunto, não uma nota única.</strong><p>Boa mobilidade não neutraliza uma área de risco. Ausência de registros não garante segurança. O relatório foi desenhado para mostrar trade-offs.</p></div><button className="text-link">Ver metodologia <ArrowUpRight size={15} /></button></div>
-
-        {analysis && <ShareCard address={searchedAddress} analysis={analysis} />}
       </section>
 
       <section className="layers-section" id="camadas">

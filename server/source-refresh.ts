@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { createSourceSnapshot, upsertSourcePayload } from "./db";
 
 const FOGO_BASE_URL = process.env.FOGO_CRUZADO_API_URL ?? "https://api-service.fogocruzado.org.br/api/v2";
-const FOGO_SECRET = process.env.FOGO_CRUZADO_API_SECRET;
-const BAHIA_ID = "d3a9b545-7056-4dc6-9b68-ce320c9edffc";
-const SALVADOR_ID = "8f3a026f-2fc4-419c-9918-f0684a2abbec";
+const FOGO_TOKEN = process.env.FOGO_CRUZADO_API_TOKEN;
+const FOGO_EMAIL = process.env.FOGO_CRUZADO_API_EMAIL;
+const FOGO_PASSWORD = process.env.FOGO_CRUZADO_API_PASSWORD;
 const PAGE_SIZE = 200;
 const ARCGIS_PAGE_SIZE = 2000;
 
@@ -68,6 +68,35 @@ async function fetchJson(url: string, init?: RequestInit) {
   throw new Error(`Falha ao consultar ${url}`);
 }
 
+async function fogoAuthHeaders() {
+  if (FOGO_TOKEN) return { authorization: `Bearer ${FOGO_TOKEN}`, accept: "application/json" };
+  if (FOGO_EMAIL && FOGO_PASSWORD) {
+    const { json } = await fetchJson(`${FOGO_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ email: FOGO_EMAIL, password: FOGO_PASSWORD }),
+    });
+    const token = json.data?.accessToken;
+    if (!token) throw new Error("Login do Fogo Cruzado não retornou accessToken");
+    return { authorization: `Bearer ${token}`, accept: "application/json" };
+  }
+  throw new Error("Configure FOGO_CRUZADO_API_EMAIL e FOGO_CRUZADO_API_PASSWORD (ou FOGO_CRUZADO_API_TOKEN) no Render; a API v2 atual usa JWT Bearer.");
+}
+
+function normalized(value: unknown) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+}
+
+async function findSalvadorIds(headers: Record<string, string>) {
+  const states = await fetchJson(`${FOGO_BASE_URL}/states`, { headers });
+  const bahia = (states.json.data ?? []).find((state: any) => normalized(state.name) === "BAHIA");
+  if (!bahia?.id) throw new Error("Bahia não encontrada no endpoint /states do Fogo Cruzado");
+  const cities = await fetchJson(`${FOGO_BASE_URL}/cities?${new URLSearchParams({ stateId: bahia.id })}`, { headers });
+  const salvador = (cities.json.data ?? []).find((city: any) => normalized(city.name) === "SALVADOR");
+  if (!salvador?.id) throw new Error("Salvador não encontrada no endpoint /cities do Fogo Cruzado");
+  return { stateId: bahia.id, cityId: salvador.id };
+}
+
 async function saveSnapshot(source: { slug: string; name: string; url: string }, body: string, rowCount: number, metadata: Record<string, unknown>) {
   const fetchedAt = new Date();
   const digest = checksum(body);
@@ -118,12 +147,13 @@ async function refreshGeoSource(source: typeof GEO_SOURCES[number]) {
 }
 
 async function refreshFogoSalvador() {
-  if (!FOGO_SECRET) throw new Error("FOGO_CRUZADO_API_SECRET não configurado no ambiente");
+  const headers = await fogoAuthHeaders();
+  const { stateId, cityId } = await findSalvadorIds(headers);
   const occurrences: Array<Record<string, any>> = [];
   let page = 1;
   while (true) {
-    const params = new URLSearchParams({ idState: BAHIA_ID, idCities: SALVADOR_ID, page: String(page), take: String(PAGE_SIZE) });
-    const { json } = await fetchJson(`${FOGO_BASE_URL}/occurrences?${params}`, { headers: { "x-api-secret": FOGO_SECRET, accept: "application/json" } });
+    const params = new URLSearchParams({ idState: stateId, idCities: cityId, page: String(page), take: String(PAGE_SIZE) });
+    const { json } = await fetchJson(`${FOGO_BASE_URL}/occurrences?${params}`, { headers });
     const rows = Array.isArray(json.data) ? json.data : [];
     occurrences.push(...rows);
     if (!json.pageMeta?.hasNextPage || rows.length === 0) break;
@@ -131,8 +161,8 @@ async function refreshFogoSalvador() {
   }
   const jsonPayload = JSON.stringify({ city: "Salvador", state: "Bahia", fetchedAt: new Date().toISOString(), data: occurrences });
   const csvPayload = occurrenceCsv(occurrences);
-  const jsonInfo = await saveSnapshot({ slug: "fogo-cruzado-salvador-json", name: "Fogo Cruzado · Salvador · JSON completo", url: `${FOGO_BASE_URL}/occurrences` }, jsonPayload, occurrences.length, { format: "json", pages: page, cityId: SALVADOR_ID, stateId: BAHIA_ID });
-  const csvInfo = await saveSnapshot({ slug: "fogo-cruzado-salvador-csv", name: "Fogo Cruzado · Salvador · CSV completo", url: "https://api.fogocruzado.org.br/search" }, csvPayload, occurrences.length, { format: "csv", pages: page, cityId: SALVADOR_ID, stateId: BAHIA_ID, generatedFrom: "occurrences API used by the official search/export page" });
+  const jsonInfo = await saveSnapshot({ slug: "fogo-cruzado-salvador-json", name: "Fogo Cruzado · Salvador · JSON completo", url: `${FOGO_BASE_URL}/occurrences` }, jsonPayload, occurrences.length, { format: "json", pages: page, cityId, stateId });
+  const csvInfo = await saveSnapshot({ slug: "fogo-cruzado-salvador-csv", name: "Fogo Cruzado · Salvador · CSV completo", url: "https://api.fogocruzado.org.br/search" }, csvPayload, occurrences.length, { format: "csv", pages: page, cityId, stateId, generatedFrom: "occurrences API v2 authenticated with JWT" });
   await upsertSourcePayload({ sourceSlug: "fogo-cruzado-salvador-csv", sourceName: "Fogo Cruzado · Salvador · CSV completo", format: "csv", sourceUrl: "https://api.fogocruzado.org.br/search", fetchedAt: csvInfo.fetchedAt, rowCount: occurrences.length, checksum: csvInfo.checksum, payload: csvPayload });
   return { slug: "fogo-cruzado-salvador", status: "ok", rowCount: occurrences.length, pages: page, csvSnapshotId: csvInfo.snapshotId, checksum: csvInfo.checksum };
 }
