@@ -17,8 +17,7 @@ Configure no Render, nunca no GitHub:
 | `OWNER_OPEN_ID` | Identidade administrativa do proprietário |
 | `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` | Recursos server-side do runtime Manus, quando usados |
 | `FOGO_CRUZADO_API_URL` | Base da API usada pelo exportador oficial; o padrão já está no `render.yaml` |
-| `FOGO_CRUZADO_API_EMAIL` / `FOGO_CRUZADO_API_PASSWORD` | Credenciais privadas usadas pelo Cron Job para obter JWT na API v2; configure no Render e não publique no GitHub |
-| `FOGO_CRUZADO_API_TOKEN` | Alternativa: JWT válido da API v2; pode expirar e exige renovação operacional |
+| `FOGO_CRUZADO_WEB_SECRET` | Opcional: segredo público utilizado pelo JavaScript da página de pesquisa; o código possui fallback para o valor atualmente publicado pela própria página |
 
 As chaves `VITE_*` são embutidas no bundle do navegador; use apenas chaves públicas/restritas por domínio. Não coloque tokens do Fogo Cruzado no frontend.
 
@@ -44,7 +43,7 @@ A migração atual cria `source_snapshots`, `source_payloads` e `user_reports`. 
 
 O Web Service executa `pnpm build:render`, aplica as migrações no pre-deploy e inicia com `pnpm start`. O Cron Job executa `pnpm exec tsx server/refresh-sources.ts` diariamente às 03:15 UTC. A frequência pode ser alterada no Blueprint.
 
-O job baixa diariamente os registros completos de Bairros, Escolas e Órgãos públicos do GeoSalvador em GeoJSON. Para o Fogo Cruzado, faz login JWT na API v2, descobre os IDs atuais de Bahia e Salvador, consulta todos os registros paginados, gera um CSV completo e preserva o JSON bruto em memória. A API atual não usa mais `x-api-secret`; configure email/senha autorizados ou um JWT válido somente como segredo no Render.
+O job baixa diariamente os registros completos de Bairros, Escolas e Órgãos públicos do GeoSalvador em GeoJSON. Para o Fogo Cruzado, reproduz o fluxo público da página `/search`: usa o mesmo `x-api-secret` público do frontend oficial, descobre os IDs atuais de Bahia e Salvador, consulta todas as páginas de Salvador e gera no servidor o CSV equivalente ao botão “CSV”. A página não fornece um arquivo CSV estático; ela também monta o arquivo no navegador a partir dessas respostas. Se o Fogo Cruzado alterar a chave pública ou o formato, configure `FOGO_CRUZADO_WEB_SECRET` no Render.
 
 O CSV atualizado pode ser baixado pelo backend por `/api/data/fogo-cruzado-salvador-csv`, além das rotas equivalentes do GeoSalvador. O JSON completo retornado pela API é usado em memória para gerar o CSV e não é duplicado no armazenamento persistente. Cada resposta inclui `X-Source-Fetched-At` e `X-Source-Checksum`.
 
@@ -54,4 +53,4 @@ O frontend usa Leaflet, os tiles públicos do OpenStreetMap e o endpoint Nominat
 
 ## Diagnóstico no Render
 
-Depois do primeiro Cron Job, consulte `GET /api/health/sources` no domínio do Web Service. O endpoint informa se cada payload está disponível, data, quantidade de registros, checksum e os últimos snapshots de erro. Se `fogo-cruzado-salvador-csv` estiver `missing`, verifique primeiro as credenciais JWT e o log do Cron Job; se todos estiverem `missing`, verifique `DATABASE_URL` e o `preDeployCommand`.
+Depois do primeiro Cron Job, consulte `GET /api/health/sources` no domínio do Web Service. O endpoint informa se cada payload está disponível, data, quantidade de registros, checksum e os últimos snapshots de erro. Se `fogo-cruzado-salvador-csv` estiver `missing`, verifique primeiro o log do Cron Job e a variável opcional `FOGO_CRUZADO_WEB_SECRET`; se todos estiverem `missing`, verifique `DATABASE_URL` e o `preDeployCommand`.

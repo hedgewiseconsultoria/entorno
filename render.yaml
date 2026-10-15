@@ -28,11 +28,7 @@ services:
         sync: false
       - key: FOGO_CRUZADO_API_URL
         value: https://api-service.fogocruzado.org.br/api/v2
-      - key: FOGO_CRUZADO_API_EMAIL
-        sync: false
-      - key: FOGO_CRUZADO_API_PASSWORD
-        sync: false
-      - key: FOGO_CRUZADO_API_TOKEN
+      - key: FOGO_CRUZADO_WEB_SECRET
         sync: false
 
   - type: cron
@@ -49,9 +45,5 @@ services:
         sync: false
       - key: FOGO_CRUZADO_API_URL
         value: https://api-service.fogocruzado.org.br/api/v2
-      - key: FOGO_CRUZADO_API_EMAIL
-        sync: false
-      - key: FOGO_CRUZADO_API_PASSWORD
-        sync: false
-      - key: FOGO_CRUZADO_API_TOKEN
+      - key: FOGO_CRUZADO_WEB_SECRET
         sync: false

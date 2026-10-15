@@ -38,9 +38,7 @@ describe("refreshPublicSources", () => {
     vi.restoreAllMocks();
     createSourceSnapshot.mockClear();
     upsertSourcePayload.mockClear();
-    process.env.FOGO_CRUZADO_API_TOKEN = "test-token";
-    delete process.env.FOGO_CRUZADO_API_EMAIL;
-    delete process.env.FOGO_CRUZADO_API_PASSWORD;
+    process.env.FOGO_CRUZADO_WEB_SECRET = "test-public-web-secret";
     vi.stubGlobal("fetch", fakeFetch());
   });
 
