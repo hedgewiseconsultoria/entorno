@@ -21,11 +21,11 @@ pnpm build
 pnpm dev
 ```
 
-A aplicação precisa de `DATABASE_URL` para análise real. A sincronização reproduz o fluxo público dos botões CSV da página de pesquisa do Fogo Cruzado: consulta as páginas públicas e monta no servidor o CSV diário. `FOGO_CRUZADO_WEB_SECRET` é opcional, pois há fallback para o segredo público atualmente embutido no frontend oficial.
+A aplicação precisa de `DATABASE_URL` para análise real. A sincronização usa Playwright e Chromium para abrir a página oficial de pesquisa do Fogo Cruzado, selecionar Salvador e baixar o arquivo pelo botão “CSV”. Não são necessárias credenciais ou variáveis de API do Fogo Cruzado.
 
 ## Deploy no Render
 
-O arquivo `render.yaml` define o Web Service e o Cron Job diário. No Render, configure pelo menos `DATABASE_URL`, `VITE_APP_ID`, `OWNER_OPEN_ID`, `BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY`; `FOGO_CRUZADO_WEB_SECRET` só será necessário se a chave pública da página mudar. O Web Service executa as migrações no pre-deploy. Depois do primeiro Cron Job, consulte `/api/health/sources` para confirmar os payloads.
+O arquivo `render.yaml` define o Web Service e o Cron Job diário. No Render, configure pelo menos `DATABASE_URL`, `VITE_APP_ID`, `OWNER_OPEN_ID`, `BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY`. O Cron Job instala o Chromium antes de executar a rotina. Depois do primeiro Cron Job, consulte `/api/health/sources` para confirmar os payloads.
 
 ```bash
 git init

@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 import { createSourceSnapshot, upsertSourcePayload } from "./db";
+import { downloadFogoCsvFromOfficialPage } from "./fogo-page-download";
 
-const FOGO_BASE_URL = process.env.FOGO_CRUZADO_API_URL ?? "https://api-service.fogocruzado.org.br/api/v2";
-const FOGO_WEB_SECRET = process.env.FOGO_CRUZADO_WEB_SECRET ?? "3x4Aur@ircW4Pg@bOi55w3QOx6BjrLC*f47xV5aGGFtMEfn0^I";
-const PAGE_SIZE = 200;
 const ARCGIS_PAGE_SIZE = 2000;
 
 const GEO_SOURCES = [
@@ -14,41 +12,6 @@ const GEO_SOURCES = [
 
 function checksum(value: string) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function csvCell(value: unknown) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
-function occurrenceCsv(rows: Array<Record<string, any>>) {
-  const headers = ["id", "document_number", "address", "state", "city", "region", "neighborhood", "sub_neighborhood", "locality", "latitude", "longitude", "occurrence_date", "police_action", "agent_presence", "police_unit", "main_reason", "complementary_reasons", "clippings", "massacre", "victim_count"];
-  const lines = rows.map((row) => {
-    const context = row.contextInfo ?? {};
-    return [
-      row.id,
-      row.documentNumber,
-      row.address,
-      row.state?.name,
-      row.city?.name,
-      row.region?.region,
-      row.neighborhood?.name,
-      row.subNeighborhood?.name,
-      row.locality?.name,
-      row.latitude,
-      row.longitude,
-      row.date,
-      row.policeAction,
-      row.agentPresence,
-      context.policeUnit,
-      context.mainReason?.name,
-      (context.complementaryReasons ?? []).map((item: any) => item.name).join("; "),
-      (context.clippings ?? []).map((item: any) => item.name ?? item).join("; "),
-      context.massacre,
-      Array.isArray(row.victims) ? row.victims.length : 0,
-    ].map(csvCell).join(",");
-  });
-  return [headers.join(","), ...lines].join("\n") + "\n";
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -64,24 +27,6 @@ async function fetchJson(url: string, init?: RequestInit) {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
   throw new Error(`Falha ao consultar ${url}`);
-}
-
-function fogoWebHeaders() {
-  return { "x-api-secret": FOGO_WEB_SECRET, accept: "application/json" };
-}
-
-function normalized(value: unknown) {
-  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-}
-
-async function findSalvadorIds(headers: Record<string, string>) {
-  const states = await fetchJson(`${FOGO_BASE_URL}/states`, { headers });
-  const bahia = (states.json.data ?? []).find((state: any) => normalized(state.name) === "BAHIA");
-  if (!bahia?.id) throw new Error("Bahia não encontrada no endpoint /states do Fogo Cruzado");
-  const cities = await fetchJson(`${FOGO_BASE_URL}/cities?${new URLSearchParams({ stateId: bahia.id })}`, { headers });
-  const salvador = (cities.json.data ?? []).find((city: any) => normalized(city.name) === "SALVADOR");
-  if (!salvador?.id) throw new Error("Salvador não encontrada no endpoint /cities do Fogo Cruzado");
-  return { stateId: bahia.id, cityId: salvador.id };
 }
 
 async function saveSnapshot(source: { slug: string; name: string; url: string }, body: string, rowCount: number, metadata: Record<string, unknown>) {
@@ -134,24 +79,24 @@ async function refreshGeoSource(source: typeof GEO_SOURCES[number]) {
 }
 
 async function refreshFogoSalvador() {
-  const headers = fogoWebHeaders();
-  const { stateId, cityId } = await findSalvadorIds(headers);
-  const occurrences: Array<Record<string, any>> = [];
-  let page = 1;
-  while (true) {
-    const params = new URLSearchParams({ idState: stateId, idCities: cityId, page: String(page), take: String(PAGE_SIZE) });
-    const { json } = await fetchJson(`${FOGO_BASE_URL}/occurrences?${params}`, { headers });
-    const rows = Array.isArray(json.data) ? json.data : [];
-    occurrences.push(...rows);
-    if (!json.pageMeta?.hasNextPage || rows.length === 0) break;
-    page += 1;
-  }
-  const jsonPayload = JSON.stringify({ city: "Salvador", state: "Bahia", fetchedAt: new Date().toISOString(), data: occurrences });
-  const csvPayload = occurrenceCsv(occurrences);
-  const jsonInfo = await saveSnapshot({ slug: "fogo-cruzado-salvador-json", name: "Fogo Cruzado · Salvador · JSON completo", url: `${FOGO_BASE_URL}/occurrences` }, jsonPayload, occurrences.length, { format: "json", pages: page, cityId, stateId });
-  const csvInfo = await saveSnapshot({ slug: "fogo-cruzado-salvador-csv", name: "Fogo Cruzado · Salvador · CSV completo", url: "https://api.fogocruzado.org.br/search" }, csvPayload, occurrences.length, { format: "csv", pages: page, cityId, stateId, generatedFrom: "official search page public CSV flow" });
-  await upsertSourcePayload({ sourceSlug: "fogo-cruzado-salvador-csv", sourceName: "Fogo Cruzado · Salvador · CSV completo", format: "csv", sourceUrl: "https://api.fogocruzado.org.br/search", fetchedAt: csvInfo.fetchedAt, rowCount: occurrences.length, checksum: csvInfo.checksum, payload: csvPayload });
-  return { slug: "fogo-cruzado-salvador", status: "ok", rowCount: occurrences.length, pages: page, csvSnapshotId: csvInfo.snapshotId, checksum: csvInfo.checksum };
+  const downloaded = await downloadFogoCsvFromOfficialPage();
+  const info = await saveSnapshot(
+    { slug: "fogo-cruzado-salvador-csv", name: "Fogo Cruzado · Salvador · CSV oficial", url: downloaded.sourceUrl },
+    downloaded.payload,
+    downloaded.rowCount,
+    downloaded.metadata,
+  );
+  await upsertSourcePayload({
+    sourceSlug: "fogo-cruzado-salvador-csv",
+    sourceName: "Fogo Cruzado · Salvador · CSV oficial",
+    format: "csv",
+    sourceUrl: downloaded.sourceUrl,
+    fetchedAt: info.fetchedAt,
+    rowCount: downloaded.rowCount,
+    checksum: info.checksum,
+    payload: downloaded.payload,
+  });
+  return { slug: "fogo-cruzado-salvador", status: "ok", rowCount: downloaded.rowCount, csvSnapshotId: info.snapshotId, checksum: info.checksum, method: "official-page-csv-download" };
 }
 
 export async function refreshPublicSources() {
@@ -162,7 +107,7 @@ export async function refreshPublicSources() {
   }
   try { results.push(await refreshFogoSalvador()); }
   catch (error) {
-    results.push(await saveErrorSnapshot({ slug: "fogo-cruzado-salvador", name: "Fogo Cruzado · Salvador", url: `${FOGO_BASE_URL}/occurrences` }, error));
+    results.push(await saveErrorSnapshot({ slug: "fogo-cruzado-salvador", name: "Fogo Cruzado · Salvador · CSV oficial", url: "https://api.fogocruzado.org.br/search" }, error));
   }
   return { refreshedAt: new Date().toISOString(), sources: results };
 }

@@ -26,24 +26,16 @@ services:
         sync: false
       - key: BUILT_IN_FORGE_API_KEY
         sync: false
-      - key: FOGO_CRUZADO_API_URL
-        value: https://api-service.fogocruzado.org.br/api/v2
-      - key: FOGO_CRUZADO_WEB_SECRET
-        sync: false
 
   - type: cron
     name: entorno-salvador-refresh
     runtime: node
     plan: starter
     schedule: "15 3 * * *"
-    buildCommand: pnpm install --frozen-lockfile
+    buildCommand: pnpm install --frozen-lockfile && pnpm exec playwright install chromium
     startCommand: pnpm exec tsx server/refresh-sources.ts
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: DATABASE_URL
-        sync: false
-      - key: FOGO_CRUZADO_API_URL
-        value: https://api-service.fogocruzado.org.br/api/v2
-      - key: FOGO_CRUZADO_WEB_SECRET
         sync: false
