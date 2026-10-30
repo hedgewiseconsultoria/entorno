@@ -2,52 +2,68 @@
 
 ## Arquitetura
 
-O projeto pode ser versionado no GitHub e executado em um Web Service Node no Render. O banco continua sendo MySQL/TiDB compatível, porque o Render não oferece MySQL gerenciado nativamente. O `render.yaml` inclui um Web Service e um Cron Job diário para atualizar metadados públicos do GeoSalvador.
+O projeto roda em um único Web Service Node no Render e não usa MySQL, TiDB, banco externo ou migrações. O processo mantém as fontes e os relatos em memória. Ao iniciar, ao receber uma análise sem cache ou ao consultar `/api/health/sources`, o servidor atualiza as camadas públicas. Enquanto estiver ativo, renova o cache a cada 24 horas.
 
-## Variáveis necessárias
+O cache é perdido quando o Render reinicia ou suspende a instância. A aplicação foi desenhada para reconstruí-lo automaticamente; portanto, a primeira consulta após uma suspensão pode demorar alguns minutos por causa do download e do Chromium.
 
-Configure no Render, nunca no GitHub:
+## Variáveis do Render
 
-| Variável | Uso |
-|---|---|
-| `DATABASE_URL` | Conexão MySQL/TiDB do Web Service e do Cron Job |
-| `VITE_APP_ID` | Identificador do aplicativo e OAuth |
-| `JWT_SECRET` | Assinatura das sessões |
-| `OAUTH_SERVER_URL` | Servidor OAuth, normalmente `https://api.manus.im` |
-| `OWNER_OPEN_ID` | Identidade administrativa do proprietário |
-| `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` | Recursos server-side do runtime Manus, quando usados |
-O Fogo Cruzado não exige variável de API: o Cron Job usa Playwright/Chromium para abrir a página oficial `/search` e baixar o arquivo pelo botão “CSV”.
+Para o núcleo público, nenhuma variável de banco é necessária. Não cadastre `DATABASE_URL`.
 
-## Banco e migrações
+Se o login for utilizado, configure:
 
-Depois de criar o banco externo, configure `DATABASE_URL`. O Blueprint agora executa `pnpm db:migrate` no `preDeployCommand` do Web Service:
+- `VITE_APP_ID`: identificador OAuth do aplicativo.
+- `VITE_OAUTH_PORTAL_URL`: portal OAuth usado pelo frontend.
+- `JWT_SECRET`: pode ser gerada pelo Render via `generateValue: true`.
+- `OAUTH_SERVER_URL`: normalmente `https://api.manus.im`.
+- `OWNER_OPEN_ID`: identificador do proprietário para recursos administrativos.
 
-```bash
-pnpm install --frozen-lockfile
-pnpm db:migrate
-```
-
-A migração atual cria `source_snapshots`, `source_payloads` e `user_reports`. O Cron Job mantém o último payload completo de cada fonte em `source_payloads` e grava um snapshot de cada execução em `source_snapshots`, preservando checksum, volume e data.
+`BUILT_IN_FORGE_API_URL` e `BUILT_IN_FORGE_API_KEY` só são necessárias para recursos Manus de IA/notificação que forem efetivamente ativados. O Fogo Cruzado não exige credenciais ou variáveis de API.
 
 ## GitHub
 
-1. Crie um repositório vazio, preferencialmente privado durante a fase de integração.
-2. Adicione o projeto, excluindo `.env`, tokens, dumps e arquivos de build.
-3. Faça push da branch principal.
-4. No Render, escolha **New + Blueprint** e aponte para o repositório, usando o `render.yaml`.
+1. Envie o conteúdo do projeto para a raiz da branch `main`.
+2. Confirme que `render.yaml`, `package.json`, `server/source-refresh.ts` e `server/fogo-page-download.ts` estão na raiz correta.
+3. Não envie `.env`, tokens, `node_modules` ou `dist`.
+4. No Render, crie ou sincronize um Blueprint usando o repositório.
 
 ## Render
 
-O Web Service executa `pnpm build:render`, aplica as migrações no pre-deploy e inicia com `pnpm start`. O Cron Job instala o Chromium com `pnpm exec playwright install chromium` e executa `pnpm exec tsx server/refresh-sources.ts` diariamente às 03:15 UTC. A frequência pode ser alterada no Blueprint.
+O Blueprint define apenas o Web Service `entorno-salvador-web`:
 
-O job baixa diariamente os registros completos de Bairros, Escolas e Órgãos públicos do GeoSalvador em GeoJSON. Para o Fogo Cruzado, abre a página `/search` com Chromium, seleciona Bahia, Salvador, o período de 01/01/2020 até a data atual, seleciona “Completo”, executa “Buscar” e aciona o botão oficial “CSV”. O arquivo baixado é armazenado em `source_payloads`.
+```bash
+pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build:render
+```
 
-O CSV atualizado pode ser baixado pelo backend por `/api/data/fogo-cruzado-salvador-csv`, além das rotas equivalentes do GeoSalvador. Cada resposta inclui `X-Source-Fetched-At` e `X-Source-Checksum`.
+O comando de inicialização é:
 
-### Mapa e custos
+```bash
+pnpm start
+```
 
-O frontend usa Leaflet, os tiles públicos do OpenStreetMap e o endpoint Nominatim no backend. Não há chave do Google Maps nem cobrança de Google nesta versão. Isso é apropriado para protótipo e baixo volume, mas os serviços públicos têm política de uso, limites de requisição e não constituem uma garantia comercial de disponibilidade. Antes de uma operação pública com muito tráfego, substitua os tiles por um provedor com SLA ou hospede a própria infraestrutura cartográfica; mantenha cache e não faça geocodificação em massa.
+Não deve existir `preDeployCommand`, `DATABASE_URL` ou Cron Job separado nesta arquitetura.
 
-## Diagnóstico no Render
+## Atualização das fontes
 
-Depois do primeiro Cron Job, consulte `GET /api/health/sources` no domínio do Web Service. O endpoint informa se cada payload está disponível, data, quantidade de registros, checksum e os últimos snapshots de erro. Se `fogo-cruzado-salvador-csv` estiver `missing`, verifique primeiro o log do Cron Job e a instalação do Chromium; se todos estiverem `missing`, verifique `DATABASE_URL` e o `preDeployCommand`.
+O servidor busca diariamente, enquanto permanece ativo:
+
+- Bairros do GeoSalvador;
+- Escolas do GeoSalvador;
+- Órgãos públicos do GeoSalvador;
+- CSV oficial do Fogo Cruzado, usando Playwright para abrir `/search`, selecionar Bahia/Salvador, escolher “Completo”, buscar e clicar no botão CSV.
+
+O endpoint `/api/health/sources` mostra o estado atual do cache. Os endpoints `/api/data/:sourceSlug` retornam os payloads disponíveis no processo.
+
+## Diagnóstico
+
+Depois do deploy, abra:
+
+```text
+/api/health/sources
+```
+
+Se o cache estiver vazio, aguarde a atualização inicial. Verifique os logs do Web Service. Uma atualização bem-sucedida deve indicar `status: "ok"` para as quatro fontes. Se o processo reiniciar, aguarde uma nova sincronização; isso é esperado neste modelo sem persistência.
+
+## Limites
+
+O cache em memória reduz custo e elimina a configuração de banco, mas não preserva histórico de fontes ou relatos. Para operação com alta disponibilidade, múltiplas instâncias, histórico ou moderação persistente, será necessário reintroduzir um armazenamento externo.

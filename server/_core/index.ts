@@ -8,7 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { sdk } from "./sdk";
-import { refreshPublicSources } from "../source-refresh";
+import { ensurePublicSourcesFresh, refreshPublicSources, SOURCE_CACHE_TTL_MS } from "../source-refresh";
 import { getSourcePayload, listLatestSourceSnapshots } from "../db";
 import { serveStatic, setupVite } from "./vite";
 
@@ -89,6 +89,7 @@ async function startServer() {
     }
   });
   app.get("/api/health/sources", async (_req, res) => {
+    await ensurePublicSourcesFresh();
     const slugs = ["fogo-cruzado-salvador-csv", "geosalvador-bairros", "geosalvador-escolas", "geosalvador-orgaos-publicos"];
     const payloads = await Promise.all(slugs.map(async (sourceSlug) => {
       const payload = await getSourcePayload(sourceSlug);
@@ -137,6 +138,10 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    void ensurePublicSourcesFresh().catch((error) => console.error("[Cache] Initial source refresh failed:", error));
+    setInterval(() => {
+      void ensurePublicSourcesFresh().catch((error) => console.error("[Cache] Scheduled source refresh failed:", error));
+    }, SOURCE_CACHE_TTL_MS);
   });
 }
 

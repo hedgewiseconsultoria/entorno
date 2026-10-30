@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
-import { createSourceSnapshot, upsertSourcePayload } from "./db";
+import { createSourceSnapshot, getSourcePayload, upsertSourcePayload } from "./db";
 import { downloadFogoCsvFromOfficialPage } from "./fogo-page-download";
 
 const ARCGIS_PAGE_SIZE = 2000;
+export const SOURCE_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const SOURCE_SLUGS = ["fogo-cruzado-salvador-csv", "geosalvador-bairros", "geosalvador-escolas", "geosalvador-orgaos-publicos"] as const;
+let refreshPromise: Promise<{ refreshedAt: string; sources: Array<Record<string, unknown>> }> | null = null;
 
 const GEO_SOURCES = [
   { slug: "geosalvador-bairros", name: "GeoSalvador · Bairros", layer: "https://geo.salvador.ba.gov.br/arcgis/rest/services/Hosted/Bairros_Feicao/FeatureServer/0" },
@@ -110,4 +113,14 @@ export async function refreshPublicSources() {
     results.push(await saveErrorSnapshot({ slug: "fogo-cruzado-salvador", name: "Fogo Cruzado · Salvador · CSV oficial", url: "https://api.fogocruzado.org.br/search" }, error));
   }
   return { refreshedAt: new Date().toISOString(), sources: results };
+}
+
+export async function ensurePublicSourcesFresh(force = false) {
+  const payloads = await Promise.all(SOURCE_SLUGS.map((slug) => getSourcePayload(slug)));
+  const fresh = !force && payloads.every((payload) => payload && Date.now() - payload.fetchedAt.getTime() < SOURCE_CACHE_TTL_MS);
+  if (fresh) return { refreshedAt: payloads.map((payload) => payload?.fetchedAt.getTime() ?? 0).sort().at(0) ? new Date(Math.min(...payloads.map((payload) => payload?.fetchedAt.getTime() ?? Date.now()))).toISOString() : null, sources: payloads };
+  if (!refreshPromise) {
+    refreshPromise = refreshPublicSources().finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
 }

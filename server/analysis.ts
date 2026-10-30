@@ -1,4 +1,5 @@
 import { getSourcePayload } from "./db";
+import { ensurePublicSourcesFresh } from "./source-refresh";
 
 type Point = { lat: number; lon: number };
 type FeatureCollection = { features?: Array<{ geometry?: { type?: string; coordinates?: unknown }; properties?: Record<string, unknown> }> };
@@ -78,6 +79,7 @@ async function getPayload(slug: string) {
 
 export async function analyzeLocation(point: Point, radiusMeters = 500) {
   if (point.lat < -13.2 || point.lat > -12.6 || point.lon < -38.8 || point.lon > -38.2) throw new Error("A análise está limitada ao município de Salvador.");
+  await ensurePublicSourcesFresh();
   const [fogo, bairros, escolas, orgaos] = await Promise.all([
     getPayload("fogo-cruzado-salvador-csv"),
     getPayload("geosalvador-bairros"),

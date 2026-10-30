@@ -3,8 +3,7 @@ services:
     name: entorno-salvador-web
     runtime: node
     plan: free
-    buildCommand: pnpm install --frozen-lockfile && pnpm build:render
-    preDeployCommand: pnpm db:migrate
+    buildCommand: pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build:render
     startCommand: pnpm start
     healthCheckPath: /
     envVars:
@@ -12,9 +11,9 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        sync: false
       - key: VITE_APP_ID
+        sync: false
+      - key: VITE_OAUTH_PORTAL_URL
         sync: false
       - key: JWT_SECRET
         generateValue: true
@@ -25,17 +24,4 @@ services:
       - key: BUILT_IN_FORGE_API_URL
         sync: false
       - key: BUILT_IN_FORGE_API_KEY
-        sync: false
-
-  - type: cron
-    name: entorno-salvador-refresh
-    runtime: node
-    plan: starter
-    schedule: "15 3 * * *"
-    buildCommand: pnpm install --frozen-lockfile && pnpm exec playwright install chromium
-    startCommand: pnpm exec tsx server/refresh-sources.ts
-    envVars:
-      - key: NODE_VERSION
-        value: "22"
-      - key: DATABASE_URL
         sync: false
